@@ -4,32 +4,136 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/faiface/pixel"
-	"github.com/faifasje/pixel/pixelgl"
+	"github.com/faiface/pixel/imdraw"
+	"github.com/faiface/pixel/pixelgl"
+	"golang.org/x/image/colornames"
 	"log"
+	"math"
 	"os"
 )
 
 func run() {
 
+	//words := getInput()
+	//length := len(words)
+	length := 4
+
+	bounds := pixel.R(0, 0, 1024, 768)
+	cells := createGrid(length, bounds)
+
+	log.Println("cells count", length)
+
 	cfg := pixelgl.WindowConfig{
 		Title:  "Pixel Rocks!",
-		Bounds: pixel.R(0, 0, 1024, 768),
+		Bounds: bounds,
+		VSync:  true, // refreshs windows with monitor rate
 	}
 	win, err := pixelgl.NewWindow(cfg)
 	if err != nil {
 		panic(err)
 	}
 
+	//imd := imdraw.New(nil)
+	//imd.Push(pixel.V(100, 100), pixel.V(500, 100), pixel.V(100, 600), pixel.V(600, 600))
+	//imd.Rectangle(0)
+
+	imd := imdraw.New(nil)
+	for _, cell := range cells {
+
+		fmt.Println(cell)
+		imd.Color = pixel.RGB(51, 0, 0)
+		imd.Push(cell.Rect.Min, cell.Rect.Max)
+		imd.Rectangle(1)
+	}
+
 	for !win.Closed() {
+		win.Clear(colornames.White)
+		imd.Draw(win)
 		win.Update()
 	}
 }
 
+type Cell struct {
+	Rect  pixel.Rect
+	Color pixel.RGBA
+}
+
 func main() {
-	//words := getInput()
 	//rMap := initMap(words)
 	//SimplePrint(rMap)
+
 	pixelgl.Run(run)
+}
+
+func calculateGrid(length int, winWidth, winHeight float64) (cols, rows int, cellSize pixel.Vec) {
+
+	aspect := winWidth / winHeight
+
+	bestScore := math.MaxFloat64
+
+	for testRows := 1; testRows <= length; testRows++ {
+		testCols := int(math.Ceil(float64(length)) / float64(testRows))
+
+		gridAspect := float64(testCols) / float64(testRows)
+		aspectDiff := math.Abs(gridAspect - aspect)
+		emptyCells := testCols*testRows - length
+
+		score := aspectDiff + float64(emptyCells)/float64(length)*0.5
+
+		if score < bestScore {
+			bestScore = score
+			cols = testCols
+			rows = testRows
+		}
+	}
+
+	cellWidth := winWidth / float64(cols)
+	cellHeight := winHeight / float64(rows)
+
+	if cellWidth > winHeight*aspect {
+		cellWidth = cellHeight * aspect
+	} else {
+		cellHeight = cellWidth / aspect
+	}
+
+	return cols, rows, pixel.V(cellWidth, cellHeight)
+}
+
+func createGrid(length int, winBounds pixel.Rect) []Cell {
+	cells := make([]Cell, 0, length)
+
+	gridSize := int(math.Ceil(float64(length)))
+	fmt.Println(gridSize)
+
+	cellHeight := winBounds.H() / float64(gridSize)
+	cellWidth := winBounds.W() / float64(gridSize)
+	fmt.Println("cellH", cellWidth)
+	fmt.Println("cellW", cellWidth)
+
+	for y := 0; y < gridSize; y++ {
+
+		for x := 0; x < gridSize; x++ {
+
+			if len(cells) >= length {
+				break
+			}
+
+			posX := float64(x) * cellWidth
+			posY := winBounds.H() - float64(y+1)*cellHeight
+
+			rect := pixel.R(
+				posX,
+				posY,
+				posX+cellWidth,
+				posY+cellHeight,
+			)
+
+			cc := float64(x) * 15
+			cell := Cell{rect, pixel.RGB(cc, cc, cc)}
+			cells = append(cells, cell)
+		}
+	}
+	return cells
 }
 
 func initMap(words []string) map[string]*popWord {
